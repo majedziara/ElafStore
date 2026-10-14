@@ -22,6 +22,6 @@ RUN mkdir -p storage/framework/cache \
 
 RUN php artisan package:discover --ansi
 
-RUN php artisan migrate
+EXPOSE 10000
 
-RUN php artisan db:seed
+CMD ["sh", "-c", "php artisan migrate --no-interaction && php artisan db:seed --class=LocalSandboxSeeder --no-interaction && php artisan serve --host=0.0.0.0 --port=10000"]

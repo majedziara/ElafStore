@@ -20,7 +20,7 @@ final class SettingService
 
     public function publicSettings(): array
     {
-        $keys = ['brand_name', 'support_email', 'logo_path', 'shipping_policy', 'return_policy', 'checkout_enabled'];
+        $keys = ['brand_name', 'support_email', 'logo_path', 'shipping_policy', 'return_policy', 'checkout_enabled', 'returns_enabled', 'exchanges_enabled', 'return_days'];
 
         return collect($keys)->mapWithKeys(fn ($k) => [$k => $this->get($k)])->all() + ['currency' => 'USD', 'language' => 'en'];
     }

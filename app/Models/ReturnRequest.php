@@ -10,6 +10,13 @@ class ReturnRequest extends Model
 
     protected $guarded = [];
 
+    protected $appends = ['photo_count'];
+
+    public function getPhotoCountAttribute(): int
+    {
+        return count($this->photo_paths ?? []);
+    }
+
     protected function casts(): array
     {
         return ['photo_paths' => 'array', 'exchange_reserved' => 'boolean', 'exchange_deducted' => 'boolean', 'restocked' => 'boolean', 'order_id' => 'integer'];

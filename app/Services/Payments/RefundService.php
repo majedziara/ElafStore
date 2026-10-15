@@ -15,7 +15,7 @@ use Throwable;
 
 final class RefundService
 {
-    public function __construct(private PayPalClient $client) {}
+    public function __construct(private GatewayClient $client) {}
 
     public function create(Order $order, array $data, int $actor): Refund
     {
@@ -50,7 +50,7 @@ final class RefundService
             }
             $a = PaymentAttempt::findOrFail($refund->payment_attempt_id);
             try {
-                $payload = $this->client->refund($a->gateway_snapshot, $a->capture_id, $refund->amount_cents, $refund->request_key);
+                $payload = $this->client->refund($a->gateway_snapshot, $a, $refund->amount_cents, $refund->request_key);
                 abort_if(empty($payload['id']), 502, 'Refund ID missing.');
                 $refund->update(['provider_refund_id' => $payload['id']]);
                 $this->apply($refund, $payload);
@@ -65,19 +65,19 @@ final class RefundService
 
     public function sync(Refund $refund): Refund
     {
-        abort_unless($refund->provider_refund_id, 409, 'Refund result is unknown. Reconcile in PayPal before attaching a provider refund ID.');
+        abort_unless($refund->provider_refund_id, 409, 'Refund result is unknown. Reconcile with the provider before attaching its refund ID.');
         $a = PaymentAttempt::findOrFail($refund->payment_attempt_id);
-        $payload = $this->client->inspectRefund($a->gateway_snapshot, $refund->provider_refund_id);
+        $payload = $this->client->inspectRefund($a->gateway_snapshot, $refund->provider_refund_id, $a->capture_id);
         $this->apply($refund, $payload);
 
         return $refund->fresh();
     }
 
-    public function import(string $environment, string $id): void
+    public function import(string $environment, string $id, string $gateway = 'paypal'): void
     {
-        $config = $this->client->configuration($environment);
+        $config = $this->client->configuration($gateway, $environment);
         $payload = $this->client->inspectRefund($config, $id);
-        $captureId = null;
+        $captureId = $payload['capture_id'] ?? null;
         foreach ($payload['links'] ?? [] as $link) {
             if (($link['rel'] ?? null) === 'up' && preg_match('~/v2/payments/captures/([A-Za-z0-9]+)$~', $link['href'] ?? '', $m)) {
                 $captureId = $m[1];
@@ -86,11 +86,19 @@ final class RefundService
         if (! $captureId) {
             return;
         }
-        $a = PaymentAttempt::where('capture_id', $captureId)->where('environment', $environment)->first();
+        $a = PaymentAttempt::where('gateway', $gateway)->where('capture_id', $captureId)->where('environment', $environment)->first();
         if (! $a) {
             return;
         }
-        $refund = Refund::firstOrCreate(['provider_refund_id' => $id], ['request_key' => (string) Str::uuid(), 'order_id' => $a->order_id,
+        if (is_string($payload['request_key'] ?? null)) {
+            $original = Refund::where('request_key', $payload['request_key'])->where('payment_attempt_id', $a->id)->first();
+            if ($original) {
+                $this->attach($original, $id);
+
+                return;
+            }
+        }
+        $refund = Refund::firstOrCreate(['provider_refund_id' => $id, 'payment_attempt_id' => $a->id], ['request_key' => (string) Str::uuid(), 'order_id' => $a->order_id,
             'payment_attempt_id' => $a->id, 'amount_cents' => Money::cents((string) data_get($payload, 'amount.value', '')), 'reason' => 'Provider refund']);
         $this->apply($refund, $payload);
     }
@@ -98,13 +106,13 @@ final class RefundService
     public function attach(Refund $refund, string $id): void
     {
         $a = PaymentAttempt::findOrFail($refund->payment_attempt_id);
-        $payload = $this->client->inspectRefund($a->gateway_snapshot, $id);
+        $payload = $this->client->inspectRefund($a->gateway_snapshot, $id, $a->capture_id);
         $up = collect($payload['links'] ?? [])->first(fn ($l) => ($l['rel'] ?? null) === 'up');
-        abort_unless(str_ends_with($up['href'] ?? '', '/v2/payments/captures/'.$a->capture_id) && data_get($payload, 'amount.currency_code') === 'USD' &&
+        abort_unless((($a->gateway === 'paypal' && str_ends_with($up['href'] ?? '', '/v2/payments/captures/'.$a->capture_id)) || ($a->gateway !== 'paypal' && ($payload['capture_id'] ?? null) === $a->capture_id)) && data_get($payload, 'amount.currency_code') === 'USD' &&
             Money::cents((string) data_get($payload, 'amount.value', '')) === $refund->amount_cents, 409, 'Refund does not belong to this capture or amount.');
         DB::transaction(function () use ($refund, $id) {
             Order::whereKey($refund->order_id)->lockForUpdate()->firstOrFail();
-            $other = Refund::where('provider_refund_id', $id)->where('id', '!=', $refund->id)->lockForUpdate()->first();
+            $other = Refund::where('payment_attempt_id', $refund->payment_attempt_id)->where('provider_refund_id', $id)->where('id', '!=', $refund->id)->lockForUpdate()->first();
             if ($other) {
                 abort_unless($other->order_id === $refund->order_id && $other->amount_cents === $refund->amount_cents && $other->reason === 'Provider refund', 409, 'Provider refund already belongs to another request.');
                 $other->update(['provider_refund_id' => null, 'status' => 'merged']);

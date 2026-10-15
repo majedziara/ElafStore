@@ -9,6 +9,9 @@ final class CatalogService
     public function query(array $filters)
     {
         $q = Product::with(['category', 'collections', 'images', 'variants', 'sizeGuide'])->where('status', 'published');
+        if (! empty($filters['ids'])) {
+            $q->whereIn('products.id', $filters['ids']);
+        }
         if (! empty($filters['q'])) {
             $q->where(function ($q) use ($filters) {
                 $q->where('name', 'like', '%'.$filters['q'].'%')->orWhere('description', 'like', '%'.$filters['q'].'%');

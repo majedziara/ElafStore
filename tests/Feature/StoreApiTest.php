@@ -190,7 +190,7 @@ class StoreApiTest extends TestCase
             $this->getJson('/api/v1/admin/'.$path)->assertOk();
         }
         $this->putJson('/api/v1/admin/settings', ['brand_name' => 'Nella & Vale Test'])->assertOk();
-        $this->putJson('/api/v1/admin/gateways/paypal', ['enabled' => true, 'environment' => 'sandbox'])->assertOk();
+        $this->putJson('/api/v1/admin/gateways/paypal', ['enabled' => true, 'environment' => 'sandbox'])->assertUnprocessable();
         $this->putJson('/api/v1/admin/gateways/stripe', ['enabled' => true])->assertUnprocessable();
         $this->postJson('/api/v1/admin/media', ['image' => UploadedFile::fake()->image('logo.png')])->assertOk();
         $this->deleteJson('/api/v1/admin/products/'.$id)->assertNoContent();

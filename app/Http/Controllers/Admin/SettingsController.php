@@ -3,11 +3,10 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
-use App\Models\PaymentGateway;
 use App\Models\Setting;
 use App\Models\ShippingMethod;
 use App\Services\AuditService;
-use App\Services\Payments\PayPalClient;
+use App\Services\Payments\GatewayRegistry;
 use App\Services\SettingService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -35,7 +34,7 @@ class SettingsController extends Controller
         }
         if ($get('checkout_enabled', false)) {
             abort_unless(in_array($get('tax_mode'), ['none', 'manual'], true) && ShippingMethod::where('is_active', true)->exists() &&
-                PaymentGateway::where('slug', 'paypal')->where('enabled', true)->exists(), 422, 'Configure shipping, tax mode and an enabled payment gateway first.');
+                count(app(GatewayRegistry::class)->methods()) > 0, 422, 'Configure shipping, tax mode and an enabled payment gateway first.');
         }
         DB::transaction(function () use ($d, $s) {
             foreach ($d as $key => $value) {
@@ -47,51 +46,37 @@ class SettingsController extends Controller
         return ['message' => 'Settings saved.'];
     }
 
-    public function gateways()
+    public function gateways(GatewayRegistry $gateways): array
     {
-        return ['data' => PaymentGateway::all()->map(fn ($g) => ['slug' => $g->slug, 'name' => $g->name, 'enabled' => $g->enabled, 'environment' => $g->environment,
-            'implemented' => $g->slug === 'paypal', 'configured_fields' => collect($g->credentials ?? [])->map(fn ($c) => array_keys(array_filter($c)))])];
+        return ['data' => collect(GatewayRegistry::NAMES)->map(function (string $name, string $slug) use ($gateways): array {
+            $environment = $gateways->environment($slug);
+            $prefix = match ($slug) {
+                'paypal' => 'PAYPAL', 'stripe' => 'STRIPE', 'triple-a' => 'TRIPLEA'
+            };
+            $modes = [];
+            foreach (['sandbox', 'live'] as $mode) {
+                $modes[$mode] = ['ready' => $gateways->ready($slug, $mode), 'missing' => $gateways->missing($slug, $mode),
+                    'env_keys' => array_map(fn (string $field): string => $prefix.'_'.strtoupper($mode).'_'.strtoupper($field), $gateways->fields($slug))];
+            }
+
+            return ['slug' => $slug, 'name' => $name, 'enabled' => $gateways->available($slug), 'environment' => $environment,
+                'implemented' => true, 'configuration_source' => 'env', 'mode_key' => $prefix.'_MODE', 'environments' => $modes,
+                'webhook_urls' => ['sandbox' => $gateways->webhookUrl($slug, 'sandbox'), 'live' => $gateways->webhookUrl($slug, 'live')]];
+        })->values()->all()];
     }
 
-    public function gateway(Request $r, string $slug, PayPalClient $client)
+    public function gateway(Request $request, string $slug): array
     {
-        $g = PaymentGateway::where('slug', $slug)->firstOrFail();
-        $d = $r->validate(['enabled' => 'sometimes|boolean', 'environment' => 'sometimes|in:sandbox,live',
-            'credentials' => 'sometimes|array:sandbox,live', 'credentials.sandbox' => 'sometimes|array:client_id,client_secret,merchant_id,webhook_id',
-            'credentials.live' => 'sometimes|array:client_id,client_secret,merchant_id,webhook_id',
-            'credentials.*.client_id' => 'sometimes|nullable|string|max:255', 'credentials.*.client_secret' => 'sometimes|nullable|string|max:255',
-            'credentials.*.merchant_id' => 'sometimes|nullable|string|max:80', 'credentials.*.webhook_id' => 'sometimes|nullable|string|max:120']);
-        abort_if(($d['enabled'] ?? false) && $slug !== 'paypal', 422, 'This gateway adapter has not been implemented.');
-        abort_if(isset($d['credentials']) && $slug !== 'paypal', 422, 'Credential format is available for PayPal only.');
+        abort_unless(isset(GatewayRegistry::NAMES[$slug]), 422, 'This payment gateway is not implemented.');
+        abort_if($request->has('credentials') || $request->has('environment') || $request->has('enabled'), 422, 'Payment settings are managed in Laravel .env. Reload configuration after changing them.');
 
-        return DB::transaction(function () use ($g, $d, $slug, $client) {
-            $g = PaymentGateway::whereKey($g->id)->lockForUpdate()->firstOrFail();
-            if (isset($d['credentials'])) {
-                $credentials = $g->credentials ?? [];
-                foreach ($d['credentials'] as $env => $fields) {
-                    $credentials[$env] = array_replace($credentials[$env] ?? [], array_filter($fields, fn ($v) => $v !== null));
-                }
-                $g->credentials = $credentials;
-            }
-            if (isset($d['environment'])) {
-                $g->environment = $d['environment'];
-            }
-            if (isset($d['enabled'])) {
-                $g->enabled = $d['enabled'];
-            } $g->save();
-            if ($g->enabled && $slug === 'paypal') {
-                $client->configuration($g->environment);
-            }
-            app(AuditService::class)->record('gateway_saved', 'gateway', $g->id, ['slug' => $g->slug, 'enabled' => $g->enabled, 'environment' => $g->environment, 'credential_fields_changed' => isset($d['credentials'])]);
-
-            return ['data' => ['slug' => $g->slug, 'enabled' => $g->enabled, 'environment' => $g->environment]];
-        });
+        return ['message' => 'Payment settings are managed in Laravel .env.'];
     }
 
     public function media(Request $r)
     {
         $r->validate(['image' => 'required|image|mimes:jpg,jpeg,png,webp|max:8192']);
-        $path = $r->file('image')->store('content','public');
+        $path = $r->file('image')->store('content', 'public');
 
         return ['data' => ['path' => $path, 'url' => Storage::disk('public')->url($path)]];
     }

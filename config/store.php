@@ -3,6 +3,7 @@
 return [
     'url' => rtrim(env('APP_URL', 'http://localhost:8000'), '/'),
     'currency' => 'USD',
+    'bff_rate_secret' => env('BFF_RATE_SECRET'),
     'reservation_minutes' => 30,
     'link_minutes' => 60,
     'guest_access_minutes' => 30,

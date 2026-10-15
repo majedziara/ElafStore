@@ -2,6 +2,7 @@
 
 namespace App\Console\Commands;
 
+use App\Jobs\ProcessGatewayWebhook;
 use App\Jobs\ProcessPayPalWebhook;
 use App\Models\LinkToken;
 use App\Models\Order;
@@ -53,7 +54,7 @@ class MaintainStore extends Command
             });
         LinkToken::where('expires_at', '<', now()->subDay())->delete();
         WebhookEvent::whereNull('processed_at')->where('created_at', '<', now()->subMinutes(5))->orderBy('id')->limit(30)->get()
-            ->each(fn ($e) => ProcessPayPalWebhook::dispatch($e->id));
+            ->each(fn ($e) => $e->provider === 'paypal' ? ProcessPayPalWebhook::dispatch($e->id) : ProcessGatewayWebhook::dispatch($e->id));
 
         return self::SUCCESS;
     }

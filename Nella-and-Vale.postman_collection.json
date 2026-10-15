@@ -18,7 +18,7 @@
                     "const base = String(pm.variables.get('base_url') || '').replace(/\\/$/, '');",
                     "const front = String(pm.variables.get('frontend_url') || '').replace(/\\/$/, '');",
                     "const resolved = pm.variables.replaceIn(pm.request.url.toString());",
-                    "const isWebhook = resolved.includes('/webhooks/paypal/');",
+                    "const isWebhook = resolved.includes('/webhooks/');",
                     "if (!isWebhook) {",
                     "  pm.request.headers.upsert({key:'Origin', value:front});",
                     "  pm.request.headers.upsert({key:'Referer', value:front + '/'});",
@@ -5712,7 +5712,7 @@
                     "response": []
                 },
                 {
-                    "name": "Configure PayPal Sandbox",
+                    "name": "Reject Browser Configuration — paypal",
                     "request": {
                         "method": "PUT",
                         "header": [
@@ -5738,10 +5738,10 @@
                                 "paypal"
                             ]
                         },
-                        "description": "جلسة مدير فعّال وبريد موثق؛ الصلاحية بحسب مجلد هذا الطلب. يمكن وضع المفاتيح في env بدلاً من dashboard؛ config يمزج DB فوق env. الكود يتحقق اكتمال التهيئة لا صحة اعتماد PayPal عبر دفع فعلي.\n\n| الحقل | الإلزام والقواعد / الملاحظة |\n|---|---|\n| `enabled` | اختياري boolean؛ true يتطلب الأربع مفاتيح مكتملة لهذه البيئة. |\n| `environment` | اختياري sandbox/live؛ المثال sandbox؛ live يحتاج credentials.live كاملة. |\n| `credentials` | اختياري object بمفتاح sandbox و/أو live فقط. الحقول تمزج مع المخزن؛ null لا يمسح السر. |\n| `credentials.sandbox.client_id` | اختياري في schema؛ عملياً مطلوب للتهيئة؛ ≤255. |\n| `credentials.sandbox.client_secret` | اختياري في schema؛ عملياً مطلوب للتهيئة؛ ≤255، سر. |\n| `credentials.sandbox.merchant_id` | اختياري في schema؛ عملياً مطلوب؛ ≤80؛ حساب التاجر. |\n| `credentials.sandbox.webhook_id` | اختياري في schema؛ عملياً مطلوب؛ ≤120؛ Webhook subscription على التطبيق الموافق. |\n| `credentials.live.*` | نفس أسماء وقواعد sandbox؛ أرسل فقط عند ربط live الفعلي. |",
+                        "description": "Payment credentials, enabled flags and modes are managed exclusively in Laravel .env. A write with configuration values returns 422. Inspect GET admin/gateways for readiness and required environment variable names.",
                         "body": {
                             "mode": "raw",
-                            "raw": "{\n  \"enabled\": true,\n  \"environment\": \"sandbox\",\n  \"credentials\": {\n    \"sandbox\": {\n      \"client_id\": \"{{paypal_client_id}}\",\n      \"client_secret\": \"{{paypal_client_secret}}\",\n      \"merchant_id\": \"{{paypal_merchant_id}}\",\n      \"webhook_id\": \"{{paypal_webhook_id}}\"\n    }\n  }\n}",
+                            "raw": "{\"enabled\": true}",
                             "options": {
                                 "raw": {
                                     "language": "json"
@@ -5752,7 +5752,7 @@
                     "response": []
                 },
                 {
-                    "name": "Disable PayPal",
+                    "name": "Reject Browser Configuration — paypal",
                     "request": {
                         "method": "PUT",
                         "header": [
@@ -5778,10 +5778,10 @@
                                 "paypal"
                             ]
                         },
-                        "description": "جلسة مدير فعّال وبريد موثق؛ الصلاحية بحسب مجلد هذا الطلب. عدّل المثال قبل الإرسال.\n\n| الحقل | الإلزام والقواعد / الملاحظة |\n|---|---|\n| `enabled` | boolean false؛ يوقف بدء مدفوعات جديدة. لا يمحو بيانات التسوية للعمليات القديمة. |",
+                        "description": "Payment credentials, enabled flags and modes are managed exclusively in Laravel .env. A write with configuration values returns 422. Inspect GET admin/gateways for readiness and required environment variable names.",
                         "body": {
                             "mode": "raw",
-                            "raw": "{\n  \"enabled\": false\n}",
+                            "raw": "{\"enabled\": true}",
                             "options": {
                                 "raw": {
                                     "language": "json"
@@ -5792,7 +5792,7 @@
                     "response": []
                 },
                 {
-                    "name": "Keep triple-a Disabled — Adapter Not Implemented",
+                    "name": "Reject Browser Configuration — triple-a",
                     "request": {
                         "method": "PUT",
                         "header": [
@@ -5818,10 +5818,10 @@
                                 "triple-a"
                             ]
                         },
-                        "description": "جلسة مدير فعّال وبريد موثق؛ الصلاحية بحسب مجلد هذا الطلب. هذا طلب تعطيل/إبقاء معطل وليس ربط دفع. لا يوجد adapter في دليل الباكند لهذه البوابة.\n\n| الحقل | الإلزام والقواعد / الملاحظة |\n|---|---|\n| `enabled` | false فقط حالياً؛ true ينتج422، وإرسال credentials لهذه البوابة ينتج422. |",
+                        "description": "Payment credentials, enabled flags and modes are managed exclusively in Laravel .env. A write with configuration values returns 422. Inspect GET admin/gateways for readiness and required environment variable names.",
                         "body": {
                             "mode": "raw",
-                            "raw": "{\n  \"enabled\": false\n}",
+                            "raw": "{\"enabled\": true}",
                             "options": {
                                 "raw": {
                                     "language": "json"
@@ -5832,7 +5832,7 @@
                     "response": []
                 },
                 {
-                    "name": "Keep btcpay Disabled — Adapter Not Implemented",
+                    "name": "Reject Browser Configuration — btcpay",
                     "request": {
                         "method": "PUT",
                         "header": [
@@ -5858,10 +5858,10 @@
                                 "btcpay"
                             ]
                         },
-                        "description": "جلسة مدير فعّال وبريد موثق؛ الصلاحية بحسب مجلد هذا الطلب. هذا طلب تعطيل/إبقاء معطل وليس ربط دفع. لا يوجد adapter في دليل الباكند لهذه البوابة.\n\n| الحقل | الإلزام والقواعد / الملاحظة |\n|---|---|\n| `enabled` | false فقط حالياً؛ true ينتج422، وإرسال credentials لهذه البوابة ينتج422. |",
+                        "description": "Payment credentials, enabled flags and modes are managed exclusively in Laravel .env. A write with configuration values returns 422. Inspect GET admin/gateways for readiness and required environment variable names.",
                         "body": {
                             "mode": "raw",
-                            "raw": "{\n  \"enabled\": false\n}",
+                            "raw": "{\"enabled\": true}",
                             "options": {
                                 "raw": {
                                     "language": "json"
@@ -5872,7 +5872,7 @@
                     "response": []
                 },
                 {
-                    "name": "Keep stripe Disabled — Adapter Not Implemented",
+                    "name": "Reject Browser Configuration — stripe",
                     "request": {
                         "method": "PUT",
                         "header": [
@@ -5898,10 +5898,10 @@
                                 "stripe"
                             ]
                         },
-                        "description": "جلسة مدير فعّال وبريد موثق؛ الصلاحية بحسب مجلد هذا الطلب. هذا طلب تعطيل/إبقاء معطل وليس ربط دفع. لا يوجد adapter في دليل الباكند لهذه البوابة.\n\n| الحقل | الإلزام والقواعد / الملاحظة |\n|---|---|\n| `enabled` | false فقط حالياً؛ true ينتج422، وإرسال credentials لهذه البوابة ينتج422. |",
+                        "description": "Payment credentials, enabled flags and modes are managed exclusively in Laravel .env. A write with configuration values returns 422. Inspect GET admin/gateways for readiness and required environment variable names.",
                         "body": {
                             "mode": "raw",
-                            "raw": "{\n  \"enabled\": false\n}",
+                            "raw": "{\"enabled\": true}",
                             "options": {
                                 "raw": {
                                     "language": "json"
@@ -5912,7 +5912,7 @@
                     "response": []
                 },
                 {
-                    "name": "Keep 2checkout Disabled — Adapter Not Implemented",
+                    "name": "Reject Browser Configuration — 2checkout",
                     "request": {
                         "method": "PUT",
                         "header": [
@@ -5938,10 +5938,10 @@
                                 "2checkout"
                             ]
                         },
-                        "description": "جلسة مدير فعّال وبريد موثق؛ الصلاحية بحسب مجلد هذا الطلب. هذا طلب تعطيل/إبقاء معطل وليس ربط دفع. لا يوجد adapter في دليل الباكند لهذه البوابة.\n\n| الحقل | الإلزام والقواعد / الملاحظة |\n|---|---|\n| `enabled` | false فقط حالياً؛ true ينتج422، وإرسال credentials لهذه البوابة ينتج422. |",
+                        "description": "Payment credentials, enabled flags and modes are managed exclusively in Laravel .env. A write with configuration values returns 422. Inspect GET admin/gateways for readiness and required environment variable names.",
                         "body": {
                             "mode": "raw",
-                            "raw": "{\n  \"enabled\": false\n}",
+                            "raw": "{\"enabled\": true}",
                             "options": {
                                 "raw": {
                                     "language": "json"
@@ -5952,7 +5952,7 @@
                     "response": []
                 },
                 {
-                    "name": "Keep bank-of-palestine Disabled — Adapter Not Implemented",
+                    "name": "Reject Browser Configuration — bank-of-palestine",
                     "request": {
                         "method": "PUT",
                         "header": [
@@ -5978,10 +5978,10 @@
                                 "bank-of-palestine"
                             ]
                         },
-                        "description": "جلسة مدير فعّال وبريد موثق؛ الصلاحية بحسب مجلد هذا الطلب. هذا طلب تعطيل/إبقاء معطل وليس ربط دفع. لا يوجد adapter في دليل الباكند لهذه البوابة.\n\n| الحقل | الإلزام والقواعد / الملاحظة |\n|---|---|\n| `enabled` | false فقط حالياً؛ true ينتج422، وإرسال credentials لهذه البوابة ينتج422. |",
+                        "description": "Payment credentials, enabled flags and modes are managed exclusively in Laravel .env. A write with configuration values returns 422. Inspect GET admin/gateways for readiness and required environment variable names.",
                         "body": {
                             "mode": "raw",
-                            "raw": "{\n  \"enabled\": false\n}",
+                            "raw": "{\"enabled\": true}",
                             "options": {
                                 "raw": {
                                     "language": "json"
@@ -6907,6 +6907,321 @@
                     "response": []
                 }
             ]
+        },
+        {
+            "name": "Stripe & Triple-A Hosted Payments and Signed Webhooks",
+            "item": [
+                {
+                    "name": "Start Stripe Hosted Payment",
+                    "request": {
+                        "method": "POST",
+                        "header": [
+                            {
+                                "key": "Accept",
+                                "value": "application/json"
+                            },
+                            {
+                                "key": "X-Order-Token",
+                                "value": "{{order_token}}"
+                            }
+                        ],
+                        "url": {
+                            "raw": "{{base_url}}/api/v1/orders/{{order_uuid}}/payments/stripe",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "api",
+                                "v1",
+                                "orders",
+                                "{{order_uuid}}",
+                                "payments",
+                                "stripe"
+                            ]
+                        },
+                        "description": "Prices come from the saved order. Requires complete keys for the selected sandbox/live environment. Open approval_url, then use the protected return/cancel URLs. An existing unresolved payment prevents switching providers."
+                    },
+                    "event": [
+                        {
+                            "listen": "test",
+                            "script": {
+                                "type": "text/javascript",
+                                "exec": [
+                                    "if (pm.response.code === 200) {",
+                                    "  const data = pm.response.json().data;",
+                                    "  pm.collectionVariables.set('approval_url', data.approval_url || '');",
+                                    "  for (const action of ['return','cancel']) {const match = data[action + '_url'].match(/[?&]state=([^&]+)/); pm.collectionVariables.set('stripe_' + action + '_state', match ? match[1] : '');}",
+                                    "}"
+                                ]
+                            }
+                        }
+                    ],
+                    "response": []
+                },
+                {
+                    "name": "Stripe Return Callback",
+                    "request": {
+                        "method": "GET",
+                        "header": [
+                            {
+                                "key": "Accept",
+                                "value": "application/json"
+                            }
+                        ],
+                        "url": {
+                            "raw": "{{base_url}}/api/payments/stripe/return?state={{stripe_return_state}}",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "api",
+                                "payments",
+                                "stripe",
+                                "return"
+                            ],
+                            "query": [
+                                {
+                                    "key": "state",
+                                    "value": "{{stripe_return_state}}"
+                                }
+                            ]
+                        },
+                        "description": "Use the protected state from Start Payment. Browser status/amount parameters never confirm a payment. Laravel verifies it through the provider API."
+                    },
+                    "response": []
+                },
+                {
+                    "name": "Stripe Cancel Callback",
+                    "request": {
+                        "method": "GET",
+                        "header": [
+                            {
+                                "key": "Accept",
+                                "value": "application/json"
+                            }
+                        ],
+                        "url": {
+                            "raw": "{{base_url}}/api/payments/stripe/cancel?state={{stripe_cancel_state}}",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "api",
+                                "payments",
+                                "stripe",
+                                "cancel"
+                            ],
+                            "query": [
+                                {
+                                    "key": "state",
+                                    "value": "{{stripe_cancel_state}}"
+                                }
+                            ]
+                        },
+                        "description": "Use the protected state from Start Payment. Browser status/amount parameters never confirm a payment. Laravel verifies it through the provider API."
+                    },
+                    "response": []
+                },
+                {
+                    "name": "Receive Original Signed Stripe Webhook",
+                    "request": {
+                        "method": "POST",
+                        "header": [
+                            {
+                                "key": "Accept",
+                                "value": "application/json"
+                            },
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            },
+                            {
+                                "key": "Stripe-Signature",
+                                "value": "{{stripe_signature}}"
+                            }
+                        ],
+                        "url": {
+                            "raw": "{{base_url}}/api/v1/webhooks/stripe/{{payment_environment}}",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "api",
+                                "v1",
+                                "webhooks",
+                                "stripe",
+                                "{{payment_environment}}"
+                            ]
+                        },
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{{stripe_original_webhook_body}}",
+                            "options": {
+                                "raw": {
+                                    "language": "json"
+                                }
+                            }
+                        },
+                        "description": "Supply the exact unmodified body and t=...,v1=... header sent by the provider. Timestamp tolerance is 300 seconds. The provider API is checked before financial state changes. Replaying an accepted event does not repeat the payment."
+                    },
+                    "response": []
+                },
+                {
+                    "name": "Start Triple-A Hosted Payment",
+                    "request": {
+                        "method": "POST",
+                        "header": [
+                            {
+                                "key": "Accept",
+                                "value": "application/json"
+                            },
+                            {
+                                "key": "X-Order-Token",
+                                "value": "{{order_token}}"
+                            }
+                        ],
+                        "url": {
+                            "raw": "{{base_url}}/api/v1/orders/{{order_uuid}}/payments/triple-a",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "api",
+                                "v1",
+                                "orders",
+                                "{{order_uuid}}",
+                                "payments",
+                                "triple-a"
+                            ]
+                        },
+                        "description": "Prices come from the saved order. Requires complete keys for the selected sandbox/live environment. Open approval_url, then use the protected return/cancel URLs. An existing unresolved payment prevents switching providers."
+                    },
+                    "event": [
+                        {
+                            "listen": "test",
+                            "script": {
+                                "type": "text/javascript",
+                                "exec": [
+                                    "if (pm.response.code === 200) {",
+                                    "  const data = pm.response.json().data;",
+                                    "  pm.collectionVariables.set('approval_url', data.approval_url || '');",
+                                    "  for (const action of ['return','cancel']) {const match = data[action + '_url'].match(/[?&]state=([^&]+)/); pm.collectionVariables.set('triplea_' + action + '_state', match ? match[1] : '');}",
+                                    "}"
+                                ]
+                            }
+                        }
+                    ],
+                    "response": []
+                },
+                {
+                    "name": "Triple-A Return Callback",
+                    "request": {
+                        "method": "GET",
+                        "header": [
+                            {
+                                "key": "Accept",
+                                "value": "application/json"
+                            }
+                        ],
+                        "url": {
+                            "raw": "{{base_url}}/api/payments/triple-a/return?state={{triplea_return_state}}",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "api",
+                                "payments",
+                                "triple-a",
+                                "return"
+                            ],
+                            "query": [
+                                {
+                                    "key": "state",
+                                    "value": "{{triplea_return_state}}"
+                                }
+                            ]
+                        },
+                        "description": "Use the protected state from Start Payment. Browser status/amount parameters never confirm a payment. Laravel verifies it through the provider API."
+                    },
+                    "response": []
+                },
+                {
+                    "name": "Triple-A Cancel Callback",
+                    "request": {
+                        "method": "GET",
+                        "header": [
+                            {
+                                "key": "Accept",
+                                "value": "application/json"
+                            }
+                        ],
+                        "url": {
+                            "raw": "{{base_url}}/api/payments/triple-a/cancel?state={{triplea_cancel_state}}",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "api",
+                                "payments",
+                                "triple-a",
+                                "cancel"
+                            ],
+                            "query": [
+                                {
+                                    "key": "state",
+                                    "value": "{{triplea_cancel_state}}"
+                                }
+                            ]
+                        },
+                        "description": "Use the protected state from Start Payment. Browser status/amount parameters never confirm a payment. Laravel verifies it through the provider API."
+                    },
+                    "response": []
+                },
+                {
+                    "name": "Receive Original Signed Triple-A Webhook",
+                    "request": {
+                        "method": "POST",
+                        "header": [
+                            {
+                                "key": "Accept",
+                                "value": "application/json"
+                            },
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            },
+                            {
+                                "key": "Triplea-Signature",
+                                "value": "{{triplea_signature}}"
+                            }
+                        ],
+                        "url": {
+                            "raw": "{{base_url}}/api/v1/webhooks/triple-a/{{payment_environment}}",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "api",
+                                "v1",
+                                "webhooks",
+                                "triple-a",
+                                "{{payment_environment}}"
+                            ]
+                        },
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{{triplea_original_webhook_body}}",
+                            "options": {
+                                "raw": {
+                                    "language": "json"
+                                }
+                            }
+                        },
+                        "description": "Supply the exact unmodified body and t=...,v1=... header sent by the provider. Timestamp tolerance is 300 seconds. The provider API is checked before financial state changes. Replaying an accepted event does not repeat the payment."
+                    },
+                    "response": []
+                }
+            ]
         }
     ],
     "variable": [
@@ -7343,6 +7658,51 @@
         {
             "key": "paypal_cancel_state",
             "value": "",
+            "type": "string"
+        },
+        {
+            "key": "stripe_return_state",
+            "value": "",
+            "type": "string"
+        },
+        {
+            "key": "stripe_cancel_state",
+            "value": "",
+            "type": "string"
+        },
+        {
+            "key": "stripe_signature",
+            "value": "",
+            "type": "string"
+        },
+        {
+            "key": "stripe_original_webhook_body",
+            "value": "",
+            "type": "string"
+        },
+        {
+            "key": "triplea_return_state",
+            "value": "",
+            "type": "string"
+        },
+        {
+            "key": "triplea_cancel_state",
+            "value": "",
+            "type": "string"
+        },
+        {
+            "key": "triplea_signature",
+            "value": "",
+            "type": "string"
+        },
+        {
+            "key": "triplea_original_webhook_body",
+            "value": "",
+            "type": "string"
+        },
+        {
+            "key": "payment_environment",
+            "value": "sandbox",
             "type": "string"
         }
     ]

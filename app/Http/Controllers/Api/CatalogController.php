@@ -19,7 +19,7 @@ class CatalogController extends Controller
 {
     public function index(Request $r, CatalogService $service)
     {
-        $f = $r->validate(['q' => 'nullable|string|max:100', 'category' => 'nullable|string|max:160', 'collection' => 'nullable|string|max:160',
+        $f = $r->validate(['ids' => 'nullable|array|max:30', 'ids.*' => 'integer|min:1|distinct', 'q' => 'nullable|string|max:100', 'category' => 'nullable|string|max:160', 'collection' => 'nullable|string|max:160',
             'color' => 'nullable|string|max:80', 'size' => 'nullable|string|max:30', 'min_cents' => 'nullable|integer|min:0|max:100000000',
             'max_cents' => 'nullable|integer|min:0|max:100000000', 'in_stock' => 'nullable|boolean', 'sort' => 'nullable|in:newest,price_asc,price_desc', 'per_page' => 'nullable|integer|min:1|max:48']);
 

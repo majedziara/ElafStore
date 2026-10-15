@@ -5,7 +5,6 @@ namespace App\Services\Payments;
 use App\Models\Order;
 use App\Models\OrderEvent;
 use App\Models\PaymentAttempt;
-use App\Models\PaymentGateway;
 use App\Notifications\StoreMail;
 use App\Services\InventoryService;
 use App\Services\OrderAccessService;
@@ -18,26 +17,28 @@ use Throwable;
 
 final class PaymentService
 {
-    public function __construct(private PayPalClient $client, private InventoryService $stock) {}
+    public function __construct(private GatewayClient $client, private InventoryService $stock, private GatewayRegistry $gateways) {}
 
-    public function start(Order $order): PaymentAttempt
+    public function start(Order $order, string $gatewaySlug = 'paypal'): PaymentAttempt
     {
-        return Cache::lock('order-payment:'.$order->id, 120)->block(5, function () use ($order) {
+        return Cache::lock('order-payment:'.$order->id, 120)->block(5, function () use ($order, $gatewaySlug) {
             $created = false;
-            $attempt = DB::transaction(function () use ($order, &$created) {
+            $attempt = DB::transaction(function () use ($order, $gatewaySlug, &$created) {
                 $o = Order::whereKey($order->id)->lockForUpdate()->firstOrFail();
                 abort_if($o->paid_at || $o->canceled_at, 409, 'Order is not payable.');
                 $existing = $o->payments()->latest('id')->first();
                 if ($existing) {
+                    abort_unless($existing->gateway === $gatewaySlug, 409, 'An existing payment must be reconciled before choosing another gateway.');
+
                     return $existing;
                 }
                 abort_if($o->reservation_expires_at->isPast() || $o->stock_status !== 'reserved', 409, 'Order reservation expired. Create a new bag.');
-                $gateway = PaymentGateway::where('slug', 'paypal')->firstOrFail();
-                abort_unless($gateway->enabled, 503, 'PayPal is disabled.');
+                abort_unless($this->gateways->available($gatewaySlug), 503, 'Payment gateway is unavailable.');
+                $environment = $this->gateways->environment($gatewaySlug);
                 $created = true;
 
-                return PaymentAttempt::create(['uuid' => (string) Str::uuid(), 'order_id' => $o->id, 'gateway' => 'paypal', 'environment' => $gateway->environment,
-                    'gateway_snapshot' => $this->client->configuration($gateway->environment)]);
+                return PaymentAttempt::create(['uuid' => (string) Str::uuid(), 'order_id' => $o->id, 'gateway' => $gatewaySlug, 'environment' => $environment,
+                    'gateway_snapshot' => $this->client->configuration($gatewaySlug, $environment)]);
             }, 3);
             if (! $created) {
                 if ($attempt->status === 'creating') {
@@ -50,12 +51,11 @@ final class PaymentService
             try {
                 $payload = $this->client->create($attempt->gateway_snapshot, $order, $attempt->uuid);
                 $id = $payload['id'] ?? null;
-                abort_unless(is_string($id) && $id !== '', 502, 'PayPal order ID missing.');
+                abort_unless(is_string($id) && $id !== '', 502, 'Provider payment ID missing.');
                 $attempt->update(['provider_order_id' => $id]);
                 $link = collect($payload['links'] ?? [])->first(fn ($l) => in_array($l['rel'] ?? null, ['approve', 'payer-action'], true));
                 $url = $link['href'] ?? null;
-                abort_unless($url && parse_url($url, PHP_URL_SCHEME) === 'https' &&
-                    in_array(parse_url($url, PHP_URL_HOST), ['www.paypal.com', 'www.sandbox.paypal.com'], true), 502, 'PayPal approval URL missing.');
+                abort_unless($this->client->validApprovalUrl($attempt->gateway, $url), 502, 'Provider checkout URL missing or invalid.');
                 $attempt->update(['provider_order_id' => $id, 'approval_url' => $url, 'status' => 'awaiting_approval']);
             } catch (Throwable $e) {
                 $attempt->update(['status' => 'unknown', 'last_error' => 'Provider request needs reconciliation.']);
@@ -78,7 +78,7 @@ final class PaymentService
             $this->validateOrder($a, $payload);
             $knownCaptures = data_get($payload, 'purchase_units.0.payments.captures', []);
             $order = $a->order->fresh();
-            if (! $order->paid_at && ! $knownCaptures && ! $a->capture_requested_at && $order->reservation_expires_at->isPast() &&
+            if ($a->gateway === 'paypal' && ! $order->paid_at && ! $knownCaptures && ! $a->capture_requested_at && $order->reservation_expires_at->isPast() &&
                 in_array($payload['status'] ?? null, ['CREATED', 'SAVED', 'PAYER_ACTION_REQUIRED', 'APPROVED'], true)) {
                 DB::transaction(function () use ($a, $order) {
                     $o = Order::whereKey($order->id)->lockForUpdate()->firstOrFail();
@@ -112,13 +112,14 @@ final class PaymentService
             $capture = $captures[0] ?? null;
             if ($capture) {
                 $this->applyCapture($a, $capture);
-            } elseif (($payload['status'] ?? null) === 'VOIDED') {
-                DB::transaction(function () use ($a) {
+            } elseif (in_array($payload['status'] ?? null, ['VOIDED', 'EXPIRED'], true)) {
+                DB::transaction(function () use ($a, $payload) {
                     $o = Order::whereKey($a->order_id)->lockForUpdate()->firstOrFail();
                     if (! $o->paid_at) {
-                        $a->update(['status' => 'canceled']);
+                        $terminalStatus = ($payload['status'] ?? null) === 'EXPIRED' ? 'expired' : 'canceled';
+                        $a->update(['status' => $terminalStatus]);
                         $this->stock->release($o);
-                        $o->update(['payment_status' => 'canceled', 'fulfillment_status' => 'canceled', 'canceled_at' => now()]);
+                        $o->update(['payment_status' => $terminalStatus, 'fulfillment_status' => 'canceled', 'canceled_at' => now()]);
                     }
                 }, 3);
             } elseif ($a->capture_requested_at && ! $order->paid_at) {
@@ -137,11 +138,11 @@ final class PaymentService
     public function validateOrder(PaymentAttempt $a, array $payload): void
     {
         $o = $a->order;
-        abort_unless(($payload['id'] ?? null) === $a->provider_order_id && count($payload['purchase_units'] ?? []) === 1, 409, 'PayPal order mismatch.');
+        abort_unless(($payload['id'] ?? null) === $a->provider_order_id && count($payload['purchase_units'] ?? []) === 1, 409, 'Provider order mismatch.');
         $unit = $payload['purchase_units'][0];
         abort_unless(($unit['custom_id'] ?? null) === $o->uuid && ($unit['amount']['currency_code'] ?? null) === 'USD' &&
             Money::cents((string) ($unit['amount']['value'] ?? '')) === $o->total_cents &&
-            ($unit['payee']['merchant_id'] ?? null) === $a->gateway_snapshot['credentials']['merchant_id'], 409, 'PayPal amount, currency, merchant or order mismatch.');
+            ($a->gateway !== 'paypal' || ($unit['payee']['merchant_id'] ?? null) === $a->gateway_snapshot['credentials']['merchant_id']), 409, 'Provider amount, currency, merchant or order mismatch.');
     }
 
     private function applyCapture(PaymentAttempt $attempt, array $capture): void
@@ -154,7 +155,7 @@ final class PaymentService
             abort_if($a->capture_id && $a->capture_id !== $capture['id'], 409, 'Capture ID mismatch.');
             $a->capture_id = $capture['id'];
             $status = $capture['status'] ?? '';
-            if (in_array($status, ['COMPLETED', 'PARTIALLY_REFUNDED', 'REFUNDED'], true)) {
+            if (in_array($status, ['COMPLETED', 'PARTIALLY_REFUNDED', 'REFUNDED', 'REVERSED'], true)) {
                 $a->status = 'completed';
                 $a->last_error = null;
                 if (! $o->paid_at) {
@@ -169,7 +170,13 @@ final class PaymentService
                     Notification::route('mail', $o->email)->notify(new StoreMail('Payment confirmed — '.$o->reference,
                         ['Your payment has been confirmed. Your order will now be prepared.'], app(OrderAccessService::class)->link($o), 'View order'));
                 }
-                if ($status === 'REFUNDED') {
+                if (isset($capture['refunded_cents'])) {
+                    abort_if($capture['refunded_cents'] < 0 || $capture['refunded_cents'] > $o->total_cents, 409, 'Provider refund amount mismatch.');
+                    $o->update(['refunded_cents' => max($o->refunded_cents, $capture['refunded_cents'])]);
+                }
+                if ($status === 'REVERSED') {
+                    $o->update(['payment_status' => 'reversed', 'fulfillment_status' => $o->shipped_at ? $o->fulfillment_status : 'on_hold']);
+                } elseif ($status === 'REFUNDED') {
                     $o->update(['payment_status' => 'refunded', 'refunded_cents' => $o->total_cents]);
                 } elseif ($status === 'PARTIALLY_REFUNDED' && $o->payment_status !== 'refunded') {
                     $o->update(['payment_status' => 'partially_refunded']);

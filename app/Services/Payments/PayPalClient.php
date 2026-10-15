@@ -3,7 +3,6 @@
 namespace App\Services\Payments;
 
 use App\Models\Order;
-use App\Models\PaymentGateway;
 use App\Support\Money;
 use Illuminate\Http\Client\PendingRequest;
 use Illuminate\Support\Facades\Cache;
@@ -16,8 +15,7 @@ final class PayPalClient
     public function configuration(string $environment): array
     {
         abort_unless(in_array($environment, ['sandbox', 'live'], true), 422, 'Invalid PayPal environment.');
-        $g = PaymentGateway::where('slug', 'paypal')->first();
-        $credentials = array_replace(config('store.paypal.'.$environment), ($g?->credentials ?? [])[$environment] ?? []);
+        $credentials = config('store.paypal.'.$environment);
         foreach (['client_id', 'client_secret', 'merchant_id', 'webhook_id'] as $key) {
             abort_if(empty($credentials[$key]), 503, 'PayPal is not fully configured.');
         }

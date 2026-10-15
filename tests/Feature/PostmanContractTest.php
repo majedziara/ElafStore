@@ -20,7 +20,7 @@ class PostmanContractTest extends TestCase
                 $request = $item['request'];
                 $url = str_replace('{{base_url}}', 'http://localhost:8000', $request['url']['raw']);
                 $url = preg_replace_callback('/\{\{([^}]+)\}\}/', fn ($m) => match ($m[1]) {
-                    'paypal_environment' => 'sandbox','photo_index' => '0',default => '1'
+                    'paypal_environment', 'payment_environment' => 'sandbox','photo_index' => '0',default => '1'
                 }, $url);
                 $route = app('router')->getRoutes()->match(Request::create($url, $request['method']));
                 $this->assertContains($request['method'], $route->methods(), $item['name']);

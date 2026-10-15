@@ -40,14 +40,14 @@ class ProcessPayPalWebhook implements ShouldQueue
                 $refunds->import($event->environment, $resource['id']);
             } else {
                 $providerId = $event->type === 'CHECKOUT.ORDER.APPROVED' ? ($resource['id'] ?? null) : data_get($resource, 'supplementary_data.related_ids.order_id');
-                $a = $providerId ? PaymentAttempt::where('environment', $event->environment)->where('provider_order_id', $providerId)->first() : null;
+                $a = $providerId ? PaymentAttempt::where('gateway', 'paypal')->where('environment', $event->environment)->where('provider_order_id', $providerId)->first() : null;
                 if (! $a && isset($resource['id'])) {
-                    $a = PaymentAttempt::where('environment', $event->environment)->where('capture_id', $resource['id'])->first();
+                    $a = PaymentAttempt::where('gateway', 'paypal')->where('environment', $event->environment)->where('capture_id', $resource['id'])->first();
                 }
                 if (! $a && $providerId && $event->type === 'CHECKOUT.ORDER.APPROVED') {
                     $uuid = data_get($resource, 'purchase_units.0.custom_id');
                     if ($uuid) {
-                        $a = PaymentAttempt::where('environment', $event->environment)->whereNull('provider_order_id')
+                        $a = PaymentAttempt::where('gateway', 'paypal')->where('environment', $event->environment)->whereNull('provider_order_id')
                             ->whereHas('order', fn ($q) => $q->where('uuid', $uuid))->latest('id')->first();
                         if ($a) {
                             $payments->attach($a, $providerId);

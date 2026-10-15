@@ -15,12 +15,16 @@ use App\Http\Controllers\Api\AccountController;
 use App\Http\Controllers\Api\CartController;
 use App\Http\Controllers\Api\CatalogController;
 use App\Http\Controllers\Api\ContactController;
+use App\Http\Controllers\Api\GatewayCallbackController;
+use App\Http\Controllers\Api\GatewayWebhookController;
 use App\Http\Controllers\Api\OrderController;
 use App\Http\Controllers\Api\PaymentController;
 use App\Http\Controllers\Api\PayPalCallbackController;
 use App\Http\Controllers\Api\PayPalWebhookController;
 use App\Http\Controllers\Api\ReturnController;
 use Illuminate\Support\Facades\Route;
+
+Route::get('payments/{gateway}/{action}', GatewayCallbackController::class)->whereIn('gateway', ['stripe', 'triple-a'])->whereIn('action', ['return', 'cancel'])->middleware('throttle:payments');
 
 Route::get('paypal/return', [PayPalCallbackController::class, 'returned'])->name('paypal.return')->middleware('throttle:payments');
 Route::get('paypal/cancel', [PayPalCallbackController::class, 'canceled'])->name('paypal.cancel')->middleware('throttle:payments');
@@ -34,6 +38,7 @@ Route::prefix('v1')->group(function () {
     Route::get('faqs', [CatalogController::class, 'faqs']);
     Route::get('settings', [CatalogController::class, 'settings']);
     Route::get('shipping-methods', [CatalogController::class, 'shipping']);
+    Route::post('webhooks/{gateway}/{environment}', GatewayWebhookController::class)->whereIn('gateway', ['stripe', 'triple-a'])->whereIn('environment', ['sandbox', 'live']);
     Route::get('payment-methods', [PaymentController::class, 'methods']);
     Route::post('contact', [ContactController::class, 'store'])->middleware('throttle:links');
     Route::middleware('throttle:public-write')->group(function () {
@@ -49,6 +54,7 @@ Route::prefix('v1')->group(function () {
     Route::get('orders/{order:uuid}', [OrderController::class, 'show']);
     Route::get('orders/{order:uuid}/receipt', [OrderController::class, 'receipt']);
     Route::post('orders/{order:uuid}/cancel', [OrderController::class, 'cancel'])->middleware('throttle:public-write');
+    Route::post('orders/{order:uuid}/payments/{gateway}', [PaymentController::class, 'start'])->whereIn('gateway', ['stripe', 'triple-a'])->middleware('throttle:payments');
     Route::post('orders/{order:uuid}/payments/paypal', [PaymentController::class, 'start'])->middleware('throttle:payments');
     Route::post('orders/{order:uuid}/payments/capture', [PaymentController::class, 'capture'])->middleware('throttle:payments');
     Route::get('orders/{order:uuid}/payments/status', [PaymentController::class, 'status'])->middleware('throttle:payments');

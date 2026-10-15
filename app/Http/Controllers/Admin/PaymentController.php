@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
+use App\Jobs\ProcessGatewayWebhook;
 use App\Jobs\ProcessPayPalWebhook;
 use App\Models\Order;
 use App\Models\PaymentAttempt;
@@ -45,9 +46,9 @@ class PaymentController extends Controller
     public function retry(WebhookEvent $event)
     {
         if (! $event->processed_at) {
-            ProcessPayPalWebhook::dispatch($event->id);
+            $event->provider === 'paypal' ? ProcessPayPalWebhook::dispatch($event->id) : ProcessGatewayWebhook::dispatch($event->id);
         }
 
-return ['message' => 'Processing requested.'];
+        return ['message' => 'Processing requested.'];
     }
 }

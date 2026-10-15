@@ -14,6 +14,23 @@ php artisan serve --host=127.0.0.1 --port=8000
 
 The API and Postman use `http://127.0.0.1:8000`; the connected Next.js storefront runs at `http://localhost:3000`. Laravel `APP_URL` is the public storefront origin so local payment and email links open the site. `PUBLIC_STORAGE_URL` points to `http://127.0.0.1:8000/storage`. Keep the existing `APP_KEY`. Configure credentials only in `.env`; `.env.example` contains sandbox/live payment configuration templates.
 
+For the Vercel storefront and Render API, set these environment variables on Render:
+
+```dotenv
+APP_URL=https://elaf-store.vercel.app
+FRONTEND_URL=https://elaf-store.vercel.app
+FRONTEND_ORIGINS=https://elaf-store.vercel.app
+SANCTUM_STATEFUL_DOMAINS=elaf-store.vercel.app
+SESSION_COOKIE=nv_session
+SESSION_DOMAIN=null
+SESSION_SECURE_COOKIE=true
+SESSION_SAME_SITE=lax
+```
+
+`SANCTUM_STATEFUL_DOMAINS` trusts frontend hosts with optional ports; `FRONTEND_ORIGINS` uses full origins. The configuration normalizes accidental schemes/trailing slashes and surrounding whitespace without adding trusted hosts. An incorrect stateful domain can allow login and `/api/v1/auth/me` while protected `/api/v1/admin/*` and `/api/v1/account/*` return `401 Unauthenticated`. The Next.js BFF must use `LARAVEL_API_URL=https://elaf-store.onrender.com` and the same `nv_session` cookie name. Keep `PUBLIC_STORAGE_URL` pointed at the Render API's `/storage` URL.
+
+After changing Render environment variables, redeploy to rebuild Laravel's configuration cache. For an existing running instance, use `php artisan config:cache --no-interaction` after its new environment is available, then restart long-running workers. Sign out and sign in again after changing cookie settings.
+
 For the local sandbox catalog and checkout configuration:
 
 ```bash
